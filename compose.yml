@@ -1,0 +1,40 @@
+x-claude-base: &claude-base
+  build:
+    context: ./images/claude-cli
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+  image: second-brain/claude-cli:latest
+  user: "${UID:-1000}:${GID:-1000}"
+  working_dir: /workspace/second-brain
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /run
+  mem_limit: 4g
+  cpus: 2
+  stdin_open: true
+  tty: true
+
+services:
+  claude:
+    <<: *claude-base
+    profiles: [rw]
+    container_name: sb-claude
+    volumes:
+      - ${SB_DATA:-/mnt/d/Gdrive/second-brain}:/workspace/second-brain
+      - claude-state:/home/user/.claude
+
+  claude-ro:
+    <<: *claude-base
+    profiles: [ro]
+    container_name: sb-claude-ro
+    volumes:
+      - ${SB_DATA:-/mnt/d/Gdrive/second-brain}:/workspace/second-brain:ro
+      - claude-state:/home/user/.claude
+
+volumes:
+  claude-state:
