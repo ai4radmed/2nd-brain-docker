@@ -4,6 +4,7 @@ x-claude-base: &claude-base
     args:
       UID: ${UID:-1000}
       GID: ${GID:-1000}
+      CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-latest}
   image: second-brain/claude-cli:latest
   user: "${UID:-1000}:${GID:-1000}"
   working_dir: /workspace/second-brain
@@ -18,6 +19,9 @@ x-claude-base: &claude-base
   cpus: 2
   stdin_open: true
   tty: true
+  environment:
+    DISABLE_AUTOUPDATER: "1"
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
 
 services:
   claude:
