@@ -3,3 +3,4 @@ secrets/*
 !secrets/README.md
 !secrets/.gitkeep
 *.log
+*.code-workspace
