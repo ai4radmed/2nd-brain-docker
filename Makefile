@@ -24,4 +24,4 @@ logs:
 
 clean:
 	docker compose down -v
-	docker rmi second-brain/claude-cli:latest 2>/dev/null || true
+	docker rmi 2nd-brain/claude-cli:latest 2>/dev/null || true

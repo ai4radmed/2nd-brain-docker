@@ -27,6 +27,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER user
 RUN mkdir -p /home/user/.claude
-WORKDIR /workspace/second-brain
+WORKDIR /workspace/2nd-brain
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

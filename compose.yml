@@ -5,9 +5,9 @@ x-claude-base: &claude-base
       UID: ${UID:-1000}
       GID: ${GID:-1000}
       CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-latest}
-  image: second-brain/claude-cli:latest
+  image: 2nd-brain/claude-cli:latest
   user: "${UID:-1000}:${GID:-1000}"
-  working_dir: /workspace/second-brain
+  working_dir: /workspace/2nd-brain
   cap_drop: [ALL]
   security_opt:
     - no-new-privileges:true
@@ -29,7 +29,7 @@ services:
     profiles: [rw]
     container_name: sb-claude
     volumes:
-      - ${SB_DATA:-/mnt/d/Gdrive/second-brain}:/workspace/second-brain
+      - ${SB_DATA:-${HOME}/projects/2nd-brain}:/workspace/2nd-brain
       - claude-state:/home/user/.claude
 
   claude-ro:
@@ -37,7 +37,7 @@ services:
     profiles: [ro]
     container_name: sb-claude-ro
     volumes:
-      - ${SB_DATA:-/mnt/d/Gdrive/second-brain}:/workspace/second-brain:ro
+      - ${SB_DATA:-${HOME}/projects/2nd-brain}:/workspace/2nd-brain:ro
       - claude-state:/home/user/.claude
 
 volumes:
