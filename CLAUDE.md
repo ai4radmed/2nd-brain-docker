@@ -33,11 +33,11 @@
 ## 운영 흐름
 
 1. 이 저장소에서 `make build` → 이미지 빌드
-2. `make rw` / `make ro` → 컨테이너 기동, 다음 두 마운트가 동시에 생성:
-   - vault: 호스트 `~/projects/2nd-brain-vault` → 컨테이너 `/workspace/2nd-brain-vault` (RW 또는 RO)
-   - guide: 호스트 `~/projects/2nd-brain-vault-guide` → 컨테이너 `/workspace/2nd-brain-vault-guide` (항상 RO)
-3. 컨테이너 안에서 Claude CLI 가 vault 프로젝트(`/workspace/2nd-brain-vault/CLAUDE.md`) 를 인식하고 작업
-4. vault 의 CLAUDE.md 는 *얇은 layer* — 자기 운영 규칙 + guide 문서들을 `@/workspace/2nd-brain-vault-guide/...` 로 `@`-import
+2. `make rw` / `make ro` → 컨테이너 기동, 두 마운트가 호스트와 *동일 상대 경로* (`~/projects/...`) 로 생성:
+   - vault: 호스트 `~/projects/2nd-brain-vault` (= `/home/ben/...`) → 컨테이너 `~/projects/2nd-brain-vault` (= `/home/user/projects/2nd-brain-vault`), RW 또는 RO
+   - guide: 호스트 `~/projects/2nd-brain-vault-guide` → 컨테이너 동일 상대 경로, 항상 RO
+3. 컨테이너 안에서 Claude CLI 가 vault 프로젝트(`~/projects/2nd-brain-vault/CLAUDE.md`) 를 인식하고 작업
+4. vault 의 CLAUDE.md 는 *얇은 layer* — 자기 운영 규칙 + guide 문서들을 `@~/projects/2nd-brain-vault-guide/...` 로 `@`-import. `~` 가 호스트(`/home/ben`) 와 컨테이너(`/home/user`) 각자의 home 으로 풀려서 **컨테이너 안 / WSL2 native 양쪽에서 동일 import 가 작동**
 5. 컨테이너 안의 모든 작업 규약은 그 CLAUDE.md (+ import 된 guide) 를 따름
 
 상세 사용법은 `README.md` 참조.

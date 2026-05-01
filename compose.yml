@@ -7,7 +7,7 @@ x-claude-base: &claude-base
       CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-latest}
   image: 2nd-brain/claude-cli:latest
   user: "${UID:-1000}:${GID:-1000}"
-  working_dir: /workspace/2nd-brain-vault
+  working_dir: /home/user/projects/2nd-brain-vault
   cap_drop: [ALL]
   security_opt:
     - no-new-privileges:true
@@ -29,8 +29,8 @@ services:
     profiles: [rw]
     container_name: sb-claude
     volumes:
-      - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/workspace/2nd-brain-vault
-      - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/workspace/2nd-brain-vault-guide:ro
+      - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/home/user/projects/2nd-brain-vault
+      - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/home/user/projects/2nd-brain-vault-guide:ro
       - claude-state:/home/user/.claude
 
   claude-ro:
@@ -38,8 +38,8 @@ services:
     profiles: [ro]
     container_name: sb-claude-ro
     volumes:
-      - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/workspace/2nd-brain-vault:ro
-      - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/workspace/2nd-brain-vault-guide:ro
+      - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/home/user/projects/2nd-brain-vault:ro
+      - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/home/user/projects/2nd-brain-vault-guide:ro
       - claude-state:/home/user/.claude
 
 volumes:
