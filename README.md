@@ -1,6 +1,6 @@
 # 2nd-brain-docker
 
-`2nd-brain` 시스템을 격리 실행하기 위한 Docker 운영 자산. Claude CLI 등을 컨테이너로 띄워 호스트 파일시스템 접근을 마운트된 폴더로 한정한다.
+`2nd-brain` 시스템을 격리 실행하기 위한 Docker 운영 자산. **2nd-brain-vault 전용 데몬 컨테이너** 모델로 운영한다.
 
 ## 짝 저장소
 
@@ -16,59 +16,92 @@
 
 ```
 .
-├── compose.yml              # 서비스 정의 (claude / claude-ro)
-├── images/claude-cli/       # Claude CLI 이미지 빌드
-│   ├── Dockerfile
-│   └── entrypoint.sh
+├── compose.yml              # 서비스 정의 (claude 데몬)
+├── images/
+│   ├── claude-cli/          # Claude CLI 이미지 빌드
+│   │   └── Dockerfile
+│   └── squid/               # (현재 미사용) egress 프록시 자산 — 2026-05 운영 마찰로 제거, 자료 보존만
+│       ├── Dockerfile
+│       └── squid.conf
+├── policy/
+│   └── managed-settings.json  # (현재 비활성) Claude Code 최우선 정책 — 단순화 검증 단계, 안정화 후 재도입 검토
+├── scripts/
+│   ├── bclaude              # 호스트 PATH 래퍼 (데몬으로 진입)
+│   └── sb-claude.service    # systemd-user 부팅 자동기동
 ├── secrets/                 # API 키·토큰 (gitignored)
 ├── .env.example             # 환경변수 템플릿
-├── .gitignore
-├── .dockerignore
-└── Makefile                 # `make rw`, `make ro` 단축
+└── Makefile                 # 단축 명령
 ```
 
 ## 첫 셋업
 
-```bash
-cp .env.example .env
-# .env 편집 — UID/GID/SB_DATA 확인 ($(id -u), $(id -g))
+전체 시퀀스가 멱등(idempotent) — 처음이든 재실행이든 같은 결과.
 
-make build
+```bash
+[ -f .env ] || cp .env.example .env   # 이미 있으면 건너뜀 (수정한 .env 보호)
+# 처음이면 .env 편집 — UID/GID 확인 ($(id -u), $(id -g)), CLAUDE_CODE_VERSION 등
+
+make build && make up
+make install-wrapper && make install-systemd
+sudo loginctl enable-linger $USER
+
+bclaude                     # 첫 실행 시 /login 1회 (OAuth 토큰은 claude-state 에 영구화)
 ```
+
+→ 이미 셋업된 머신에서 다시 실행해도 *no-op* 에 가까움. 다른 머신·재셋업 시 같은 블록 그대로 사용 가능.
 
 ## 사용
 
 ```bash
-make rw         # 데이터 RW 컨테이너 (편집 가능, brainify 가능)
-make ro         # 데이터 RO 컨테이너 (탐색·검색 전용, 변경 불가)
-make shell      # 실행 중인 컨테이너에 bash 접속
-make down       # 컨테이너 정리
+bclaude                     # 어디서 호출하든 데몬 안의 vault 에서 claude 실행
+bclaude --resume            # 대화 재개 등 인자 전달
+make up                     # 데몬 시작 (수동)
+make down                   # 데몬 정지
+make restart                # 재기동
+make shell                  # 데몬 컨테이너에 bash 진입
+make logs                   # claude 컨테이너 로그
 ```
 
-평소 작업은 `make ro` 권장. 노트 편집·brainify 가 필요할 때만 `make rw`.
+호스트 PWD 가 `~/projects/2nd-brain-vault/...` 안에 있으면 `bclaude` 가 컨테이너에서 동일 상대 경로로 들어가고, 그 외에는 vault 루트에서 시작한다.
+
+## 버전 업그레이드
+
+```bash
+# 1) .env 의 CLAUDE_CODE_VERSION 을 새 버전으로 수정
+# 2) 재빌드 + 재기동
+make build && make restart
+```
+
+자동 업데이트 없음 — `npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}` 로 빌드 타임에 핀, 런타임 업데이트 경로 없음. 의도적으로 사람이 결정하는 흐름.
 
 ## 인증
 
-기본은 OAuth (`claude login`). 첫 실행 시 컨테이너 안에서 한 번 로그인하면 `claude-state` named volume 에 영속된다 (RW/RO 컨테이너가 같은 volume 공유).
+기본은 OAuth (`claude login`). 첫 실행 시 컨테이너 안에서 한 번 로그인하면 `claude-state` named volume 에 영속.
 
 API 키 방식은 `secrets/README.md` 참조.
 
 ## 보안 모델
 
-- **마운트 최소화**: `~/projects/2nd-brain-vault` (RW) 와 `~/projects/2nd-brain-vault-guide` (RO) 만 컨테이너에 노출. 호스트 `~/`·`/mnt/c`·`/mnt/d`·`/etc` 등 비가시.
+- **마운트 최소화**: `~/projects/2nd-brain-vault` (RW) + `~/projects/2nd-brain-vault-guide` (RW — vault → guide 상향 운영을 위해) 만 노출.
 - **non-root**: `--user $(id -u):$(id -g)` 매핑.
-- **cap_drop ALL** + **no-new-privileges** + **read-only root FS** (tmpfs `/tmp`, `/run` 만 쓰기 가능).
-- **자원 제한**: mem 4G, CPU 2.
+- **cap_drop ALL** + **no-new-privileges**.
 
-Docker 가 막지 못하는 잔여 리스크 (네트워크 egress 통한 데이터 유출 등) 는 별도 대응 필요. CLAUDE.md "경로 참조" 섹션의 Docker 운영 규칙 참조.
+**현재 비활성 — 단순화·디버깅 단계** (재도입은 안정화 후 검토):
+
+- `mem_limit` / `cpus` 자원 제한 제거.
+- [`policy/managed-settings.json`](./policy/managed-settings.json) 의 Permission 정책 (자격증명·외부 송신·파괴적 명령·MCP destructive 도구 차단) 미적용 — 파일은 보존, 마운트 미연결.
+- `read_only` / `tmpfs` 정책.
+- egress 통제 — 이전엔 squid 도메인 화이트리스트(`sb-egress`)로 외부망을 막았으나, SSE keepalive buffering·5분 idle timeout 등 운영 마찰이 보안 가치를 초과해 2026-05 제거. `images/squid/` 자산은 재평가 시 출발점으로 보존.
+
+**런타임 환경변수**: `NODE_OPTIONS=--max-old-space-size=4096` (V8 heap 4GB) + `CLAUDE_CONFIG_DIR=/home/user/.claude`. Anthropic 공식 `.devcontainer` 와 trailofbits/claude-code-devcontainer 동일 설정. 빠뜨리면 Opus 4.7 + 우리 컨텍스트 조합에서 첫 복잡 질문 silent hang(V8 GC → SSE idle timeout → CLI silent retry loop) 재발 — 표준 운영값으로 취급할 것.
 
 ## 데이터 경로
 
-호스트와 컨테이너가 **동일 상대 경로** (`~/projects/...`) 를 사용합니다 — `~` 가 호스트(`/home/ben`) 와 컨테이너(`/home/user`) 각자의 home 으로 풀리므로, vault CLAUDE.md 의 import 가 **컨테이너 안 / WSL2 native 양쪽에서 동일하게 작동**합니다.
+호스트와 컨테이너가 **동일 상대 경로** (`~/projects/...`) 를 사용 — `~` 가 호스트(`/home/ben`) 와 컨테이너(`/home/user`) 각자의 home 으로 풀리므로 vault `CLAUDE.md` 의 `@~/projects/...` import 가 양쪽에서 동일하게 작동.
 
 | 항목 | 경로 (호스트·컨테이너 공통) | 마운트 모드 |
 |---|---|---|
-| vault (.env `SB_DATA`) | `~/projects/2nd-brain-vault` (WSL2 ext4 native, Syncthing 동기) | `make rw` 시 RW, `make ro` 시 RO |
-| guide (.env `SB_GUIDE`) | `~/projects/2nd-brain-vault-guide` (git 관리, 공개) | 항상 RO |
+| vault (.env `SB_DATA`) | `~/projects/2nd-brain-vault` (WSL2 ext4 native, Syncthing 동기) | RW |
+| guide (.env `SB_GUIDE`) | `~/projects/2nd-brain-vault-guide` (git 관리, 공개) | RW (vault 에서 안정화된 지침을 상향) |
 
-vault 의 `CLAUDE.md` 는 guide 문서들을 `@~/projects/2nd-brain-vault-guide/...` 로 `@`-import 하는 *얇은 layer* 패턴으로 운영합니다. 절대 경로(`/home/ben/...` 또는 `/home/user/...`) 를 직접 박아두지 말고 항상 `~/...` 표기를 사용해야 두 환경에서 동일하게 작동합니다.
+vault 의 `CLAUDE.md` 는 guide 문서들을 `@~/projects/2nd-brain-vault-guide/...` 로 `@`-import 하는 *얇은 layer* 패턴으로 운영. 절대 경로(`/home/ben/...` / `/home/user/...`) 직접 사용 금지.

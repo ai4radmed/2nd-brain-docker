@@ -1,45 +1,27 @@
-x-claude-base: &claude-base
-  build:
-    context: ./images/claude-cli
-    args:
-      UID: ${UID:-1000}
-      GID: ${GID:-1000}
-      CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-latest}
-  image: 2nd-brain/claude-cli:latest
-  user: "${UID:-1000}:${GID:-1000}"
-  working_dir: /home/user/projects/2nd-brain-vault
-  cap_drop: [ALL]
-  security_opt:
-    - no-new-privileges:true
-  read_only: true
-  tmpfs:
-    - /tmp
-    - /run
-  mem_limit: 4g
-  cpus: 2
-  stdin_open: true
-  tty: true
-  environment:
-    DISABLE_AUTOUPDATER: "1"
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-
 services:
   claude:
-    <<: *claude-base
-    profiles: [rw]
+    build:
+      context: ./images/claude-cli
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:?CLAUDE_CODE_VERSION must be set in .env (do not use latest)}
+    image: 2nd-brain/claude-cli:${CLAUDE_CODE_VERSION}
     container_name: sb-claude
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /home/user/projects/2nd-brain-vault
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CLAUDE_CONFIG_DIR: /home/user/.claude
+      NODE_OPTIONS: "--max-old-space-size=4096"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
     volumes:
       - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/home/user/projects/2nd-brain-vault
-      - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/home/user/projects/2nd-brain-vault-guide:ro
-      - claude-state:/home/user/.claude
-
-  claude-ro:
-    <<: *claude-base
-    profiles: [ro]
-    container_name: sb-claude-ro
-    volumes:
-      - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/home/user/projects/2nd-brain-vault:ro
-      - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/home/user/projects/2nd-brain-vault-guide:ro
+      - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/home/user/projects/2nd-brain-vault-guide
       - claude-state:/home/user/.claude
 
 volumes:

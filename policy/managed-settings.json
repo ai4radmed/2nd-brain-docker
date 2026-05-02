@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(/home/user/.claude.json)",
+      "Read(/home/user/.ssh/**)",
+      "Read(/home/user/.aws/**)",
+      "Read(/home/user/.gnupg/**)",
+      "Read(/home/user/.config/**/credentials*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Edit(./secrets/**)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Write(./secrets/**)",
+
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(nc *)",
+      "Bash(netcat *)",
+      "Bash(ncat *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(sftp *)",
+      "Bash(rsync *@*)",
+      "Bash(rsync *::*)",
+
+      "Bash(env)",
+      "Bash(printenv*)",
+      "Bash(cat *.env*)",
+      "Bash(cat *secret*)",
+      "Bash(cat *credential*)",
+      "Bash(cat /etc/shadow*)",
+
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/*)",
+      "Bash(rm -rf $HOME*)",
+      "Bash(dd if=*)",
+      "Bash(mkfs*)",
+      "Bash(shred *)",
+
+      "Bash(sudo *)",
+      "Bash(su *)",
+      "Bash(setuid*)",
+      "Bash(setcap*)",
+      "Bash(chmod 777 *)",
+      "Bash(chmod -R 777*)",
+
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fd*)",
+
+      "mcp__*__send*",
+      "mcp__*__send_*",
+      "mcp__*__delete*",
+      "mcp__*__delete_*",
+      "mcp__*__remove*",
+      "mcp__*__trash*"
+    ]
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "attribution": {
+    "commit": "🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+    "pr": "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+  },
+  "minimumVersion": "2.1.126",
+  "language": "korean"
+}

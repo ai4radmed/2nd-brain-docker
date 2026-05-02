@@ -28,16 +28,24 @@
 | 공개 방법론 (외부인 onboarding, vault 골격, 일반화된 워크플로우) | `~/projects/2nd-brain-vault-guide/CLAUDE.md` 및 `2nd-brain-vault-guide/README.md` |
 | 실행환경 자산 (마운트 경로, UID 매핑, compose 패턴) | 이 저장소 (자기참조) |
 
-이 저장소(Dockerfile·compose.yml·Makefile·entrypoint)에서 마운트 경로·user 매핑·작업 디렉토리 등을 변경할 경우 **반드시 `2nd-brain-vault/CLAUDE.md` 의 Docker 운영 규칙과 동기화**할 것. 두 곳이 어긋나면 컨테이너 안에서 경로 번역이 깨진다.
+이 저장소(Dockerfile·compose.yml·Makefile)에서 마운트 경로·user 매핑·작업 디렉토리 등을 변경할 경우 **반드시 `2nd-brain-vault/CLAUDE.md` 의 Docker 운영 규칙과 동기화**할 것. 두 곳이 어긋나면 컨테이너 안에서 경로 번역이 깨진다.
 
 ## 운영 흐름
 
-1. 이 저장소에서 `make build` → 이미지 빌드
-2. `make rw` / `make ro` → 컨테이너 기동, 두 마운트가 호스트와 *동일 상대 경로* (`~/projects/...`) 로 생성:
-   - vault: 호스트 `~/projects/2nd-brain-vault` (= `/home/ben/...`) → 컨테이너 `~/projects/2nd-brain-vault` (= `/home/user/projects/2nd-brain-vault`), RW 또는 RO
-   - guide: 호스트 `~/projects/2nd-brain-vault-guide` → 컨테이너 동일 상대 경로, 항상 RO
-3. 컨테이너 안에서 Claude CLI 가 vault 프로젝트(`~/projects/2nd-brain-vault/CLAUDE.md`) 를 인식하고 작업
-4. vault 의 CLAUDE.md 는 *얇은 layer* — 자기 운영 규칙 + guide 문서들을 `@~/projects/2nd-brain-vault-guide/...` 로 `@`-import. `~` 가 호스트(`/home/ben`) 와 컨테이너(`/home/user`) 각자의 home 으로 풀려서 **컨테이너 안 / WSL2 native 양쪽에서 동일 import 가 작동**
-5. 컨테이너 안의 모든 작업 규약은 그 CLAUDE.md (+ import 된 guide) 를 따름
+1. `make build` → claude-cli 이미지 빌드. `CLAUDE_CODE_VERSION` 은 `.env` 에서 명시적으로 핀 — `latest` 금지, 자동 업데이트 OFF.
+2. `make up` → claude 데몬 컨테이너 기동:
+   - `sb-claude` (RW 데몬, `sleep infinity`) — vault `~/projects/2nd-brain-vault` (RW) + guide `~/projects/2nd-brain-vault-guide` (RW — 상향 운영) 마운트
+   - egress whitelist (`sb-egress` / squid) 는 2026-05 운영 마찰로 제거 — `images/squid/` 는 보존되어 있으나 미사용
+3. `make install-wrapper` → 호스트 PATH 에 `bclaude` 설치. `make install-systemd` + `sudo loginctl enable-linger $USER` → 부팅 자동기동.
+4. 일상 사용: 호스트 어디서든 `bclaude` 호출 → 실행 중인 데몬 안 vault 에서 Claude CLI 실행. RW/RO 분리 모델 폐기 (A3) — 단일 RW 데몬.
+5. vault 의 CLAUDE.md 는 *얇은 layer* — 자기 운영 규칙 + guide 문서들을 `@~/projects/2nd-brain-vault-guide/...` 로 `@`-import. `~` 가 호스트(`/home/ben`) 와 컨테이너(`/home/user`) 각자의 home 으로 풀려 양쪽에서 동일 import 작동.
+6. 컨테이너 안의 모든 작업 규약은 그 CLAUDE.md (+ import 된 guide) 를 따름.
+
+격리 정책 현황: non-root, `cap_drop: ALL`, `no-new-privileges`. egress 화이트리스트(squid)·`read_only`/`tmpfs`·`mem_limit`/`cpus`·managed-settings 정책(`policy/managed-settings.json`) 모두 현재 비활성 — 컨테이너 단순화·디버깅을 위해 일시 제거. 컨테이너·UID·capability 차원 격리만 유지하고, prompt injection → 외부 exfiltration 차단은 향후 permission `deny`/`ask` 정책으로 보완.
+
+런타임 환경변수 (compose.yml `environment:`):
+
+- `NODE_OPTIONS=--max-old-space-size=4096` — V8 heap 4GB. 기본 1.5GB 로는 Opus 4.7 + vault 컨텍스트 + plugin/MCP 처리 시 GC pause → SSE idle timeout → silent retry loop 발생. Anthropic 공식 `.devcontainer` 와 trailofbits/claude-code-devcontainer 동일 설정 — 표준 운영값으로 취급, 노이즈 아님.
+- `CLAUDE_CONFIG_DIR=/home/user/.claude` — Claude Code 가 config dir 추정 비용 절약.
 
 상세 사용법은 `README.md` 참조.
