@@ -1,8 +1,12 @@
-.PHONY: build up down restart shell logs clean install-wrapper install-systemd
+.PHONY: build up up-gog down restart restart-gog shell logs clean install-wrapper install-systemd
 
 UID := $(shell id -u)
 GID := $(shell id -g)
 export UID GID
+
+# compose.gog.yml 을 합쳐 컨테이너 gogcli 활성화 (Option B 셋업 완료 사용자용).
+# 자세한 셋업 절차: docs/gogcli-container-setup.md
+COMPOSE_GOG := -f compose.yml -f compose.gog.yml
 
 build:
 	docker compose build
@@ -10,12 +14,19 @@ build:
 up:
 	docker compose up -d
 
+up-gog:
+	docker compose $(COMPOSE_GOG) up -d
+
 down:
 	docker compose down
 
 restart:
 	docker compose down
 	docker compose up -d
+
+restart-gog:
+	docker compose down
+	docker compose $(COMPOSE_GOG) up -d
 
 shell:
 	docker exec -it sb-claude /bin/bash

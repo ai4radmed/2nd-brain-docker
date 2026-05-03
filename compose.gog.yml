@@ -1,0 +1,20 @@
+# compose.gog.yml — opt-in overlay for container gogcli (Option B: privilege-separated)
+#
+# 사용법:
+#   docker compose -f compose.yml -f compose.gog.yml up -d
+#   또는: make up-gog
+#
+# 활성화 전제:
+#   1. ~/.config/gogcli-container/ 에 별도 OAuth client + keyring 셋업 완료
+#   2. .env 에 GOG_CONTAINER_KEYRING_PASSWORD 값 채움
+#   상세 절차: docs/gogcli-container-setup.md
+#
+# 호스트의 ~/.config/gogcli/ (default client) 는 마운트하지 않음 — 본 overlay 의 핵심.
+
+services:
+  claude:
+    volumes:
+      - /usr/local/bin/gog:/usr/local/bin/gog:ro
+      - ${HOME}/.config/gogcli-container:/home/user/.config/gogcli:ro
+    environment:
+      GOG_KEYRING_PASSWORD: ${GOG_CONTAINER_KEYRING_PASSWORD:?set GOG_CONTAINER_KEYRING_PASSWORD in .env (see docs/gogcli-container-setup.md)}

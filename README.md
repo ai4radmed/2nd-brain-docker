@@ -17,6 +17,9 @@
 ```
 .
 ├── compose.yml              # 서비스 정의 (claude 데몬)
+├── compose.gog.yml          # opt-in overlay: 컨테이너 gogcli 활성화 (Option B 셋업 후)
+├── docs/
+│   └── gogcli-container-setup.md  # 컨테이너 gogcli 권한분리 셋업 가이드 (공개)
 ├── images/
 │   ├── claude-cli/          # Claude CLI 이미지 빌드
 │   │   └── Dockerfile
@@ -60,6 +63,10 @@ make down                   # 데몬 정지
 make restart                # 재기동
 make shell                  # 데몬 컨테이너에 bash 진입
 make logs                   # claude 컨테이너 로그
+
+# 컨테이너에서 gogcli 사용 (Option B 셋업 후 — docs/gogcli-container-setup.md 참조)
+make up-gog                 # gog overlay 포함 기동
+make restart-gog            # gog overlay 포함 재기동
 ```
 
 호스트 PWD 가 `~/projects/2nd-brain-vault/...` 안에 있으면 `bclaude` 가 컨테이너에서 동일 상대 경로로 들어가고, 그 외에는 vault 루트에서 시작한다.
@@ -94,6 +101,12 @@ API 키 방식은 `secrets/README.md` 참조.
 - egress 통제 — 이전엔 squid 도메인 화이트리스트(`sb-egress`)로 외부망을 막았으나, SSE keepalive buffering·5분 idle timeout 등 운영 마찰이 보안 가치를 초과해 2026-05 제거. `images/squid/` 자산은 재평가 시 출발점으로 보존.
 
 **런타임 환경변수**: `NODE_OPTIONS=--max-old-space-size=4096` (V8 heap 4GB) + `CLAUDE_CONFIG_DIR=/home/user/.claude`. Anthropic 공식 `.devcontainer` 와 trailofbits/claude-code-devcontainer 동일 설정. 빠뜨리면 Opus 4.7 + 우리 컨텍스트 조합에서 첫 복잡 질문 silent hang(V8 GC → SSE idle timeout → CLI silent retry loop) 재발 — 표준 운영값으로 취급할 것.
+
+## 컨테이너에서 Google Workspace 사용 (옵션 B — 권한 분리)
+
+기본값 (이 저장소의 base `compose.yml`) 은 컨테이너에 gogcli 를 마운트하지 않는다 — 호스트 native Claude 만 Google Workspace 작업을 처리하는 양분 운영. 컨테이너에서도 Gmail/Calendar/Drive 작업이 필요하면 별도 OAuth client 와 keyring 으로 **권한을 분리**해서 활성화하는 것을 권장한다 (호스트의 자격증명을 그대로 주입하지 않음 — 침해 시 폭발 반경 한정).
+
+상세 절차: [`docs/gogcli-container-setup.md`](./docs/gogcli-container-setup.md). 위협 모델·GCP OAuth client 생성·scope 설계·`compose.gog.yml` 적용·검증·revoke 절차 포함.
 
 ## 데이터 경로
 

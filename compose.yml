@@ -16,6 +16,11 @@ services:
     environment:
       CLAUDE_CONFIG_DIR: /home/user/.claude
       NODE_OPTIONS: "--max-old-space-size=4096"
+      # claude.ai 계정 레벨 connector(Gmail/Calendar/Drive) 자동 로드 차단.
+      # Google Workspace 는 호스트의 gog CLI 로 일원화 — claude.ai connector 는
+      # 기능 불완전 + cache 무효화 비용만 발생. 개별 disable 미지원이라 통째로 OFF
+      # (anthropics/claude-code#29368, #50062 참조).
+      ENABLE_CLAUDEAI_MCP_SERVERS: "false"
     stdin_open: true
     tty: true
     restart: unless-stopped
