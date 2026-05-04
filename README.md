@@ -29,7 +29,7 @@
 ├── policy/
 │   └── managed-settings.json  # (현재 비활성) Claude Code 최우선 정책 — 단순화 검증 단계, 안정화 후 재도입 검토
 ├── scripts/
-│   ├── bclaude              # 호스트 PATH 래퍼 (데몬으로 진입)
+│   ├── 2nd-brain-docker     # 호스트 PATH 래퍼 (데몬으로 진입)
 │   └── sb-claude.service    # systemd-user 부팅 자동기동
 ├── secrets/                 # API 키·토큰 (gitignored)
 ├── .env.example             # 환경변수 템플릿
@@ -48,7 +48,7 @@ make build && make up
 make install-wrapper && make install-systemd
 sudo loginctl enable-linger $USER
 
-bclaude                     # 첫 실행 시 /login 1회 (OAuth 토큰은 claude-state 에 영구화)
+2nd-brain-docker            # 첫 실행 시 /login 1회 (OAuth 토큰은 claude-state 에 영구화)
 ```
 
 → 이미 셋업된 머신에서 다시 실행해도 *no-op* 에 가까움. 다른 머신·재셋업 시 같은 블록 그대로 사용 가능.
@@ -56,8 +56,8 @@ bclaude                     # 첫 실행 시 /login 1회 (OAuth 토큰은 claude
 ## 사용
 
 ```bash
-bclaude                     # 어디서 호출하든 데몬 안의 vault 에서 claude 실행
-bclaude --resume            # 대화 재개 등 인자 전달
+2nd-brain-docker            # 어디서 호출하든 데몬 안의 vault 에서 claude 실행
+2nd-brain-docker --resume   # 대화 재개 등 인자 전달
 make up                     # 데몬 시작 (수동)
 make down                   # 데몬 정지
 make restart                # 재기동
@@ -69,7 +69,7 @@ make up-gog                 # gog overlay 포함 기동
 make restart-gog            # gog overlay 포함 재기동
 ```
 
-호스트 PWD 가 `~/projects/2nd-brain-vault/...` 안에 있으면 `bclaude` 가 컨테이너에서 동일 상대 경로로 들어가고, 그 외에는 vault 루트에서 시작한다.
+호스트 PWD 가 `~/projects/2nd-brain-vault/...` 안에 있으면 `2nd-brain-docker` 가 컨테이너에서 동일 상대 경로로 들어가고, 그 외에는 vault 루트에서 시작한다.
 
 ## 버전 업그레이드
 

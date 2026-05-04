@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bclaude — host wrapper to enter the running 2nd-brain-docker daemon.
+# 2nd-brain-docker — host wrapper to enter the running 2nd-brain-docker daemon.
 # Translates host PWD into the container's mount namespace when within the vault.
 
 set -euo pipefail
@@ -9,7 +9,7 @@ VAULT_HOST="${HOME}/projects/2nd-brain-vault"
 VAULT_CONT="/home/user/projects/2nd-brain-vault"
 
 if ! docker inspect -f '{{.State.Running}}' "$CONTAINER" >/dev/null 2>&1; then
-    echo "bclaude: container '$CONTAINER' is not running." >&2
+    echo "2nd-brain-docker: container '$CONTAINER' is not running." >&2
     echo "  start it with:  cd ~/projects/2nd-brain-docker && make up" >&2
     exit 1
 fi

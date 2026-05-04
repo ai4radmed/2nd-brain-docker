@@ -36,8 +36,8 @@
 2. `make up` → claude 데몬 컨테이너 기동:
    - `sb-claude` (RW 데몬, `sleep infinity`) — vault `~/projects/2nd-brain-vault` (RW) + guide `~/projects/2nd-brain-vault-guide` (RW — 상향 운영) 마운트
    - egress whitelist (`sb-egress` / squid) 는 2026-05 운영 마찰로 제거 — `images/squid/` 는 보존되어 있으나 미사용
-3. `make install-wrapper` → 호스트 PATH 에 `bclaude` 설치. `make install-systemd` + `sudo loginctl enable-linger $USER` → 부팅 자동기동.
-4. 일상 사용: 호스트 어디서든 `bclaude` 호출 → 실행 중인 데몬 안 vault 에서 Claude CLI 실행. RW/RO 분리 모델 폐기 (A3) — 단일 RW 데몬.
+3. `make install-wrapper` → 호스트 PATH 에 `2nd-brain-docker` 설치. `make install-systemd` + `sudo loginctl enable-linger $USER` → 부팅 자동기동.
+4. 일상 사용: 호스트 어디서든 `2nd-brain-docker` 호출 → 실행 중인 데몬 안 vault 에서 Claude CLI 실행. RW/RO 분리 모델 폐기 (A3) — 단일 RW 데몬.
 5. vault 의 CLAUDE.md 는 *얇은 layer* — 자기 운영 규칙 + guide 문서들을 `@~/projects/2nd-brain-vault-guide/...` 로 `@`-import. `~` 가 호스트(`/home/ben`) 와 컨테이너(`/home/user`) 각자의 home 으로 풀려 양쪽에서 동일 import 작동.
 6. 컨테이너 안의 모든 작업 규약은 그 CLAUDE.md (+ import 된 guide) 를 따름.
 

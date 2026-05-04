@@ -39,8 +39,8 @@ clean:
 	docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^2nd-brain/claude-cli:' | xargs -r docker rmi 2>/dev/null || true
 
 install-wrapper:
-	install -m 0755 scripts/bclaude $(HOME)/.local/bin/bclaude
-	@echo "installed: $(HOME)/.local/bin/bclaude"
+	install -m 0755 scripts/2nd-brain-docker $(HOME)/.local/bin/2nd-brain-docker
+	@echo "installed: $(HOME)/.local/bin/2nd-brain-docker"
 
 install-systemd:
 	install -d $(HOME)/.config/systemd/user
