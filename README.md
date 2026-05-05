@@ -63,6 +63,7 @@ make down                   # 데몬 정지
 make restart                # 재기동
 make shell                  # 데몬 컨테이너에 bash 진입
 make logs                   # claude 컨테이너 로그
+make sync                   # 호스트 claude 버전에 컨테이너 핀 맞춰 재빌드
 
 # 컨테이너에서 gogcli 사용 (Option B 셋업 후 — docs/gogcli-container-setup.md 참조)
 make up-gog                 # gog overlay 포함 기동
@@ -73,13 +74,29 @@ make restart-gog            # gog overlay 포함 재기동
 
 ## 버전 업그레이드
 
+호스트 Claude Code 는 native installer 로 `~/.local/bin/claude` 에 깔려 있고 사용자 소유 경로라 자동 업데이트가 잘 동작한다. 컨테이너는 그 호스트 버전을 따라가도록 핀+재빌드 모델로 운영 — **호스트 = 버전 진실의 원천**.
+
+자동(권장):
+
 ```bash
-# 1) .env 의 CLAUDE_CODE_VERSION 을 새 버전으로 수정
+make sync       # 호스트 claude --version 추출 → .env 의 CLAUDE_CODE_VERSION 갱신 → 재빌드
+make restart    # 새 이미지로 컨테이너 교체
+```
+
+수동:
+
+```bash
+# 1) .env 의 CLAUDE_CODE_VERSION 을 원하는 버전으로 수정
 # 2) 재빌드 + 재기동
 make build && make restart
 ```
 
-자동 업데이트 없음 — `npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}` 로 빌드 타임에 핀, 런타임 업데이트 경로 없음. 의도적으로 사람이 결정하는 흐름.
+설계:
+
+- 컨테이너 안에서는 호스트와 **동일한 native installer** 사용 (`claude install ${VER}`) — 설치 경로·layout 통일로 인지 부하 감소.
+- npm-global 은 bootstrap (= `claude install` 호출용 entry point) 로만 잔존, PATH 우선순위로 native (`/home/user/.local/bin/claude`) 가 선택됨.
+- 런타임 self-update 는 `DISABLE_AUTOUPDATER=1` (compose.yml) 로 차단. 컨테이너 안에서 자기 자신을 덮어써봐야 쓰기 레이어로 들어가 휘발 + 같은 이미지인데 시작 시점에 따라 버전이 달라져 불변성이 깨지기 때문.
+- 갱신 경로는 오직 **이미지 재빌드** — 의도적인 사람의 결정이 git 히스토리에 남는다.
 
 ## 인증
 

@@ -1,4 +1,4 @@
-.PHONY: build up up-gog down restart restart-gog shell logs clean install-wrapper install-systemd
+.PHONY: build sync up up-gog down restart restart-gog shell logs clean install-wrapper install-systemd
 
 UID := $(shell id -u)
 GID := $(shell id -g)
@@ -10,6 +10,11 @@ COMPOSE_GOG := -f compose.yml -f compose.gog.yml
 
 build:
 	docker compose build
+
+# 호스트의 claude 버전에 컨테이너 이미지를 맞춰 재빌드.
+# 호스트가 진실의 원천 — auto-update 가 호스트 버전을 끌어올리면 그걸 따라간다.
+sync:
+	./scripts/bin/sync-claude-version.sh
 
 up:
 	docker compose up -d

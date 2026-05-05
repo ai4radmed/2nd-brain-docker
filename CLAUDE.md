@@ -32,7 +32,7 @@
 
 ## 운영 흐름
 
-1. `make build` → claude-cli 이미지 빌드. `CLAUDE_CODE_VERSION` 은 `.env` 에서 명시적으로 핀 — `latest` 금지, 자동 업데이트 OFF.
+1. `make build` → claude-cli 이미지 빌드. `CLAUDE_CODE_VERSION` 은 `.env` 에서 명시적으로 핀 — `latest` 금지. 이미지 안에서 **호스트와 동일한 native installer** (`claude install ${VER}`) 로 `~/.local/share/claude/versions/${VER}/` 에 설치되며, npm-global 은 그 명령을 호출하기 위한 bootstrap 로만 남는다. 런타임 self-update 는 `DISABLE_AUTOUPDATER=1` (compose.yml) 로 차단 — 갱신 경로는 오직 재빌드. 호스트 버전이 자동으로 올라간 뒤에는 `make sync` 가 호스트의 `claude --version` 을 읽어 `.env` 의 `CLAUDE_CODE_VERSION` 을 갱신하고 이미지를 재빌드한다.
 2. `make up` → claude 데몬 컨테이너 기동:
    - `sb-claude` (RW 데몬, `sleep infinity`) — vault `~/projects/2nd-brain-vault` (RW) + guide `~/projects/2nd-brain-vault-guide` (RW — 상향 운영) 마운트
    - egress whitelist (`sb-egress` / squid) 는 2026-05 운영 마찰로 제거 — `images/squid/` 는 보존되어 있으나 미사용
