@@ -268,6 +268,33 @@ ls ~/projects/2nd-brain-vault/00_inbox/sync-roundtrip-test.md
 - `.stignore` 패턴이 의도대로 작동해서 Windows 측에 노이즈가 안 가도록 — Syncthing 측 ignore 가 첫 방어선
 - 이미 클라우드에 올라간 노이즈는 Drive 웹에서 직접 삭제
 
+### 연결됐지만 type=relay-server (mirrored mode 특수)
+
+증상: 페어링은 성공, 두 device 가 connected, 동기는 작동. 그러나 device 카드 또는 REST API 의 `connections` 가 `type: relay-server`, `address: <외부 IP>:22067` (Syncthing 공용 relay). 외부 트래픽 + 지연 + 처리량 한계 발생.
+
+원인: WSL2 mirrored mode 에서 WSL2·Windows 가 동일 LAN IP 공유 → 양쪽 Syncthing 이 같은 sync 포트(22000) 두고 경쟁 → 한쪽이 random 포트(예: 57534) 로 fallback (SyncTrayzor 자동 처리) → Windows Defender Firewall 이 random 포트의 LAN inbound 를 차단 → discovery 가 LAN candidate(`tcp://<LAN-IP>:<random>`) 를 알려도 inbound 도달 불가 → Syncthing 이 relay 로 fallback. NAT mode 에선 발생 안 함 (다른 LAN 대역이라 포트 경쟁 없음).
+
+해결 (mirrored mode 의 localhost 양방향 포워딩 활용):
+
+1. **Windows Syncthing 의 sync 포트 명시 핀** — Web UI → Actions → Settings → Connections → Sync Protocol Listen Addresses:
+   ```
+   tcp://0.0.0.0:22001, dynamic+https://relays.syncthing.net/endpoint, quic://0.0.0.0:22001
+   ```
+   포트 값은 WSL2 측 22000 과 다른 값이면 자유. Save → Restart Syncthing.
+
+2. **양 peer 의 Address 를 localhost 로 명시** — 양쪽 Web UI → Remote Devices → 상대 device 편집 → Addresses:
+   - Windows 측 → WSL2 device → `tcp://127.0.0.1:22000, dynamic`
+   - WSL2 측 → Windows device → `tcp://127.0.0.1:22001, dynamic`
+
+3. **검증** — REST API 또는 Web UI 의 connections 보기:
+   ```bash
+   APIKEY=$(grep -oP '<apikey>\K[^<]+' ~/.local/state/syncthing/config.xml | head -1)
+   curl -ksS -H "X-API-Key: $APIKEY" "https://127.0.0.1:8384/rest/system/connections"
+   ```
+   `type: tcp-server` (또는 `tcp-client`), `address: 127.0.0.1:<port>`, `isLocal: True` 로 떨어지면 직결 성공.
+
+본 케이스는 mirrored mode 전용. NAT mode 의 LAN 직결 문제는 step 4 의 portproxy 단계로 별도 해결.
+
 ## 운영 사례 — 첫 적용 (2026-05-04 ~)
 
 | 머신 | 셋업 일자 | 비고 |
