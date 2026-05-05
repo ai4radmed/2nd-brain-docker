@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+# sb-healthcheck — verify the 2nd-brain docker stack is correctly set up.
+#
+# Probes sb-claude container for: image/version match, bind mount sanity,
+# UID, claude-state volume, env policy, network reachability, claude binary.
+# Exits 0 if no FAIL (warnings allowed), 1 otherwise.
+#
+# Override via env: SB_DOCKER_REPO, SB_VAULT, SB_GUIDE, CONTAINER
+
+set -uo pipefail
+
+SB_DOCKER_REPO="${SB_DOCKER_REPO:-$HOME/projects/2nd-brain-docker}"
+SB_VAULT="${SB_VAULT:-$HOME/projects/2nd-brain-vault}"
+SB_GUIDE="${SB_GUIDE:-$HOME/projects/2nd-brain-vault-guide}"
+CONTAINER="${CONTAINER:-sb-claude}"
+
+if [[ -t 1 ]]; then
+  RED=$'\e[31m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'; BOLD=$'\e[1m'; RESET=$'\e[0m'
+else
+  RED=''; GREEN=''; YELLOW=''; BOLD=''; RESET=''
+fi
+
+PASS_N=0; FAIL_N=0; WARN_N=0
+pass()    { printf '%s[PASS]%s %s\n' "$GREEN" "$RESET" "$1"; PASS_N=$((PASS_N+1)); }
+fail()    { printf '%s[FAIL]%s %s\n' "$RED"   "$RESET" "$1"; FAIL_N=$((FAIL_N+1)); }
+warn()    { printf '%s[WARN]%s %s\n' "$YELLOW" "$RESET" "$1"; WARN_N=$((WARN_N+1)); }
+info()    { printf '       %s\n' "$1"; }
+section() { printf '\n%s%s%s\n' "$BOLD" "$1" "$RESET"; }
+
+###### [1] docker repo files
+section "[1] docker repo"
+if [[ -d "$SB_DOCKER_REPO" ]]; then
+  pass "repo found: $SB_DOCKER_REPO"
+else
+  fail "repo missing: $SB_DOCKER_REPO"
+  exit 1
+fi
+[[ -f "$SB_DOCKER_REPO/compose.yml" ]] && pass "compose.yml present" || fail "compose.yml missing"
+
+EXPECTED_VERSION=""
+if [[ -f "$SB_DOCKER_REPO/.env" ]]; then
+  pass ".env present"
+  EXPECTED_VERSION=$(awk -F= '/^CLAUDE_CODE_VERSION=/{print $2}' "$SB_DOCKER_REPO/.env" | tr -d '"'"'")
+  [[ -n "$EXPECTED_VERSION" ]] && info "expected CLAUDE_CODE_VERSION: $EXPECTED_VERSION" \
+                               || warn "CLAUDE_CODE_VERSION not set in .env"
+else
+  fail ".env missing"
+fi
+
+###### [2] container state
+section "[2] container ($CONTAINER)"
+if ! command -v docker >/dev/null; then
+  fail "docker CLI not found on PATH"
+  exit 1
+fi
+RUNNING=$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo "missing")
+case "$RUNNING" in
+  true)  pass "container running" ;;
+  false) fail "container exists but not running"; exit 1 ;;
+  *)     fail "container '$CONTAINER' not found"; exit 1 ;;
+esac
+info "started: $(docker inspect -f '{{.State.StartedAt}}' "$CONTAINER")"
+
+ACTUAL_IMAGE=$(docker inspect -f '{{.Config.Image}}' "$CONTAINER")
+if [[ -n "$EXPECTED_VERSION" ]]; then
+  EXPECTED_IMAGE="2nd-brain/claude-cli:${EXPECTED_VERSION}"
+  if [[ "$ACTUAL_IMAGE" == "$EXPECTED_IMAGE" ]]; then
+    pass "image matches .env: $ACTUAL_IMAGE"
+  else
+    warn "image mismatch — running: $ACTUAL_IMAGE / expected: $EXPECTED_IMAGE"
+  fi
+else
+  info "image: $ACTUAL_IMAGE"
+fi
+
+WORKDIR=$(docker inspect -f '{{.Config.WorkingDir}}' "$CONTAINER")
+EXPECTED_WORKDIR="/home/user/projects/2nd-brain-vault"
+if [[ "$WORKDIR" == "$EXPECTED_WORKDIR" ]]; then
+  pass "working_dir: $WORKDIR"
+else
+  fail "working_dir wrong: got '$WORKDIR', expected '$EXPECTED_WORKDIR'"
+fi
+
+###### [3] bind mounts
+section "[3] bind mounts"
+check_mount() {
+  local label="$1" host_path="$2" container_path="$3"
+  if [[ ! -d "$host_path" ]]; then
+    fail "$label host path missing: $host_path"
+    return
+  fi
+  local sentinel
+  if [[ -f "$host_path/CLAUDE.md" ]]; then
+    sentinel="CLAUDE.md"
+  else
+    sentinel=$(ls -A "$host_path" 2>/dev/null | head -1)
+  fi
+  if [[ -z "$sentinel" ]]; then
+    warn "$label: no sentinel file to compare inodes"
+    return
+  fi
+  local h_ino c_ino
+  h_ino=$(stat -c '%i' "$host_path/$sentinel" 2>/dev/null)
+  c_ino=$(docker exec "$CONTAINER" stat -c '%i' "$container_path/$sentinel" 2>/dev/null)
+  if [[ -n "$h_ino" && "$h_ino" == "$c_ino" ]]; then
+    pass "$label bind mount (inode $h_ino, sentinel: $sentinel)"
+  else
+    fail "$label bind mount inode mismatch — host:$h_ino container:$c_ino"
+  fi
+}
+check_mount "vault" "$SB_VAULT" "/home/user/projects/2nd-brain-vault"
+check_mount "guide" "$SB_GUIDE" "/home/user/projects/2nd-brain-vault-guide"
+
+TEST_FILE=".sb-healthcheck-write-$$"
+if docker exec "$CONTAINER" sh -c "touch '/home/user/projects/2nd-brain-vault/$TEST_FILE' && rm '/home/user/projects/2nd-brain-vault/$TEST_FILE'" 2>/dev/null; then
+  pass "vault writable from container"
+else
+  fail "vault NOT writable from container"
+fi
+
+###### [4] UID / user
+section "[4] user"
+HOST_UID=$(id -u)
+CONT_UID=$(docker exec "$CONTAINER" id -u 2>/dev/null)
+if [[ "$HOST_UID" == "$CONT_UID" ]]; then
+  pass "UID match: $HOST_UID"
+else
+  fail "UID mismatch — host:$HOST_UID container:$CONT_UID (will cause permission issues)"
+fi
+
+###### [5] claude-state volume
+section "[5] claude-state volume"
+HAS_STATE=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/home/user/.claude"}}{{.Type}}:{{.Name}}{{end}}{{end}}' "$CONTAINER")
+if [[ -n "$HAS_STATE" ]]; then
+  pass "mounted at /home/user/.claude ($HAS_STATE)"
+else
+  fail "claude-state volume not mounted at /home/user/.claude"
+fi
+if docker exec "$CONTAINER" test -f /home/user/.claude/settings.json 2>/dev/null; then
+  pass "settings.json present"
+else
+  warn "settings.json missing (created on first claude run)"
+fi
+
+###### [6] env policy
+section "[6] env policy"
+ENABLE_CONNECTOR=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" \
+  | awk -F= '/^ENABLE_CLAUDEAI_MCP_SERVERS=/{print $2}')
+if [[ "$ENABLE_CONNECTOR" == "false" ]]; then
+  pass "claude.ai connectors disabled (CLAUDE.md mandate)"
+else
+  fail "ENABLE_CLAUDEAI_MCP_SERVERS != false (got '$ENABLE_CONNECTOR')"
+fi
+if docker exec "$CONTAINER" sh -c 'command -v gog' >/dev/null 2>&1; then
+  warn "gog present in container (should be host-only per CLAUDE.md)"
+else
+  pass "gog absent (host-only, per CLAUDE.md)"
+fi
+
+###### [7] network
+section "[7] network"
+HTTP_CODE=$(docker exec "$CONTAINER" curl -s -o /dev/null -w '%{http_code}' \
+  --max-time 5 -X POST https://api.anthropic.com/v1/messages 2>/dev/null || echo "000")
+case "$HTTP_CODE" in
+  000) fail "api.anthropic.com unreachable from container" ;;
+  401) pass "api gateway reachable (HTTP 401 — auth required, expected)" ;;
+  4*)  warn "api reachable but unexpected 4xx (HTTP $HTTP_CODE — captive portal/proxy?)" ;;
+  2*|3*) warn "api unexpected non-4xx (HTTP $HTTP_CODE)" ;;
+  *)   warn "api unexpected response (HTTP $HTTP_CODE)" ;;
+esac
+
+###### [8] claude binary
+section "[8] claude binary"
+CLAUDE_VER=$(docker exec "$CONTAINER" claude --version 2>/dev/null | head -1)
+if [[ -n "$CLAUDE_VER" ]]; then
+  info "$CLAUDE_VER"
+  if [[ -n "$EXPECTED_VERSION" && "$CLAUDE_VER" == *"$EXPECTED_VERSION"* ]]; then
+    pass "version matches .env ($EXPECTED_VERSION)"
+  elif [[ -n "$EXPECTED_VERSION" ]]; then
+    warn "version output doesn't contain '$EXPECTED_VERSION'"
+  else
+    pass "responds to --version"
+  fi
+else
+  fail "claude binary did not respond to --version"
+fi
+
+###### summary
+section "summary"
+printf '%s%d PASS%s, %s%d WARN%s, %s%d FAIL%s\n' \
+  "$GREEN" "$PASS_N" "$RESET" \
+  "$YELLOW" "$WARN_N" "$RESET" \
+  "$RED"   "$FAIL_N" "$RESET"
+
+[[ $FAIL_N -eq 0 ]] && exit 0 || exit 1

@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# sb-stat — live snapshot of sb-claude container state.
+# Use when responses feel slow: open a fresh bash, run sb-stat, see what's
+# happening RIGHT NOW. Complements sb-healthcheck (static config) and bench
+# (perf benchmarks). Total runtime ~2-3s.
+#
+# Override via env: CONTAINER
+
+set -uo pipefail
+
+CONTAINER="${CONTAINER:-sb-claude}"
+
+if [[ -t 1 ]]; then
+  BOLD=$'\e[1m'; RED=$'\e[31m'; YELLOW=$'\e[33m'; GREEN=$'\e[32m'; RESET=$'\e[0m'
+else
+  BOLD=''; RED=''; YELLOW=''; GREEN=''; RESET=''
+fi
+section() { printf '\n%s%s%s\n' "$BOLD" "$1" "$RESET"; }
+
+# sanity: container running?
+if ! docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -qx true; then
+  printf '%scontainer "%s" is not running%s\n' "$RED" "$CONTAINER" "$RESET"
+  exit 1
+fi
+
+printf '%s=== sb-stat %s — container=%s ===%s\n' \
+  "$BOLD" "$(date '+%Y-%m-%d %H:%M:%S')" "$CONTAINER" "$RESET"
+
+###### [1] container resources (single-shot)
+section "[1] container resources"
+docker stats --no-stream --format \
+  'CPU={{.CPUPerc}}  MEM={{.MemUsage}} ({{.MemPerc}})  NET={{.NetIO}}  BLOCK={{.BlockIO}}  PIDS={{.PIDs}}' \
+  "$CONTAINER"
+
+###### [2] cgroup CPU throttling — cumulative + 1s delta
+section "[2] cgroup CPU throttling (cumulative + 1s delta)"
+read_stat() {
+  docker exec "$CONTAINER" cat /sys/fs/cgroup/cpu.stat 2>/dev/null \
+    | awk '/^usage_usec|^nr_throttled|^throttled_usec/ {print $2}'
+}
+mapfile -t S1 < <(read_stat)
+sleep 1
+mapfile -t S2 < <(read_stat)
+if (( ${#S1[@]} == 3 && ${#S2[@]} == 3 )); then
+  USAGE2=${S2[0]}; NR_THR2=${S2[1]}; THR_USEC2=${S2[2]}
+  D_USAGE=$(( S2[0] - S1[0] ))     # CPU usec used in 1s
+  D_NR=$(( S2[1] - S1[1] ))        # throttle events in 1s
+  D_THR=$(( S2[2] - S1[2] ))       # throttled usec in 1s
+  printf 'cumulative: usage=%.1fs  throttled_events=%s  throttled_time=%.3fs\n' \
+    "$(awk -v u="$USAGE2" 'BEGIN{print u/1e6}')" \
+    "$NR_THR2" \
+    "$(awk -v t="$THR_USEC2" 'BEGIN{print t/1e6}')"
+  printf 'last 1s:    cpu=%.1f%%  throttle_events=%s  throttled=%.0fms\n' \
+    "$(awk -v u="$D_USAGE" 'BEGIN{print u/1e4}')" \
+    "$D_NR" \
+    "$(awk -v t="$D_THR" 'BEGIN{print t/1e3}')"
+  if (( D_THR > 100000 )); then
+    printf '%sNOTE%s: container is being CPU-throttled right now\n' "$YELLOW" "$RESET"
+  fi
+else
+  echo "(cgroup cpu.stat unavailable)"
+fi
+
+###### [3] processes inside container (host-side ps via docker top)
+section "[3] processes inside (top by CPU)"
+docker top "$CONTAINER" -eo pid,user,pcpu,pmem,rss,etime,cmd --sort=-pcpu 2>/dev/null \
+  | awk 'NR==1 || NR<=8' \
+  || echo "(docker top failed)"
+
+###### [4] TCP connections inside container's netns (via /proc/net/tcp)
+section "[4] TCP connections (container netns)"
+TCP_OUT=$(docker exec "$CONTAINER" bash -c '
+  total=$(awk "NR>1 && \$4==\"01\"" /proc/net/tcp | wc -l)
+  tls=$(awk "NR>1 && \$4==\"01\" && (\$3 ~ /:01BB\$/)" /proc/net/tcp | wc -l)
+  syn=$(awk "NR>1 && (\$4==\"02\" || \$4==\"03\")" /proc/net/tcp | wc -l)
+  echo "ESTABLISHED total=$total  to_443=$tls  SYN_SENT/RECV=$syn"
+' 2>/dev/null) || TCP_OUT="(unavailable)"
+echo "$TCP_OUT"
+
+###### [5] host load / memory
+section "[5] host"
+echo "load: $(awk '{printf "%s %s %s (1m 5m 15m)", $1, $2, $3}' /proc/loadavg)"
+awk '
+  /^MemTotal:/      {tot=$2}
+  /^MemAvailable:/  {avail=$2}
+  END { printf "mem:  %.1f GiB available / %.1f GiB total (%.0f%% used)\n",
+        avail/1048576, tot/1048576, (tot-avail)*100/tot }
+' /proc/meminfo
+
+###### [6] live api.anthropic.com latency (from container's network)
+section "[6] live api.anthropic.com latency (from container)"
+docker exec "$CONTAINER" curl -s -o /dev/null --max-time 6 -X POST \
+  -w 'dns=%{time_namelookup}s  connect=%{time_connect}s  tls=%{time_appconnect}s  total=%{time_total}s  http=%{http_code}\n' \
+  https://api.anthropic.com/v1/messages 2>&1 || echo "(curl failed)"
+
+###### [7] recent docker logs
+section "[7] docker logs --since=2m --tail=20"
+docker logs --since=2m --tail=20 "$CONTAINER" 2>&1 | sed 's/^/  /' || echo "  (no recent logs)"
+
+echo
