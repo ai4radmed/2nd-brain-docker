@@ -38,6 +38,8 @@
 
 ## 첫 셋업
 
+전제: 호스트에 Claude Code 가 이미 설치돼 있어야 함 (컨테이너 이미지의 `make sync` 가 호스트 버전을 추종). 호스트 설치 절차: [`docs/claude-code-host-install.md`](docs/claude-code-host-install.md).
+
 전체 시퀀스가 멱등(idempotent) — 처음이든 재실행이든 같은 결과.
 
 ```bash
@@ -97,6 +99,8 @@ make build && make restart
 - npm-global 은 bootstrap (= `claude install` 호출용 entry point) 로만 잔존, PATH 우선순위로 native (`/home/user/.local/bin/claude`) 가 선택됨.
 - 런타임 self-update 는 `DISABLE_AUTOUPDATER=1` (compose.yml) 로 차단. 컨테이너 안에서 자기 자신을 덮어써봐야 쓰기 레이어로 들어가 휘발 + 같은 이미지인데 시작 시점에 따라 버전이 달라져 불변성이 깨지기 때문.
 - 갱신 경로는 오직 **이미지 재빌드** — 의도적인 사람의 결정이 git 히스토리에 남는다.
+
+자세한 절차 (4단계 흐름 + 검증 체크리스트 + 7개 트러블슈팅 케이스 + 시나리오별 옵션): [`docs/container-update-guide.md`](docs/container-update-guide.md).
 
 ## 인증
 
