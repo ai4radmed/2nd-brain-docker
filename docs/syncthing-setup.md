@@ -301,6 +301,7 @@ ls ~/projects/2nd-brain-vault/00_inbox/sync-roundtrip-test.md
 |---|---|---|
 | laptop (mirrored mode) | 2026-05-04 | SyncTrayzor 자동 GUI 포트 override 경험. 명시적 8385 로 통일 |
 | hospital PC (NAT mode) | 2026-05-04 진행 중 | 정본 보유 머신이 아니라 받기 머신 (Windows D:\ 가 cloud 에서 먼저 채워짐) |
+| desktop (NAT mode) | 2026-05-04 | Windows 측 GUI 가 SyncTrayzor override 로 8384 에 바인딩 (XML 은 8385). NAT mode 라 무해 — 그대로 운영 |
 
 새 머신 추가 시 본 문서 업데이트.
 
