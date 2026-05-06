@@ -95,8 +95,8 @@ make build && make restart
 
 설계:
 
-- 컨테이너 안에서는 호스트와 **동일한 native installer** 사용 (`claude install ${VER}`) — 설치 경로·layout 통일로 인지 부하 감소.
-- npm-global 은 bootstrap (= `claude install` 호출용 entry point) 로만 잔존, PATH 우선순위로 native (`/home/user/.local/bin/claude`) 가 선택됨.
+- 컨테이너 안에서는 호스트와 **동일한 install 메커니즘** 사용 (`install.sh` 의 버전 핀 모드 `bash -s ${VER}`) — install 명령·경로·layout 모두 호스트와 일치, 인지 부하 최소.
+- Claude Code 는 Bun-compiled native binary 라 **Node·npm runtime 의존성 0** — 베이스 이미지가 `debian:trixie-slim` (~30MB) 으로 슬림. 향후 Node 가 필요해지면 그때 베이스 변경 검토.
 - 런타임 self-update 는 `DISABLE_AUTOUPDATER=1` (compose.yml) 로 차단. 컨테이너 안에서 자기 자신을 덮어써봐야 쓰기 레이어로 들어가 휘발 + 같은 이미지인데 시작 시점에 따라 버전이 달라져 불변성이 깨지기 때문.
 - 갱신 경로는 오직 **이미지 재빌드** — 의도적인 사람의 결정이 git 히스토리에 남는다.
 

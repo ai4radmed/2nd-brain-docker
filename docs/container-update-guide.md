@@ -60,13 +60,15 @@ image: 2nd-brain/claude-cli:${CLAUDE_CODE_VERSION}
 ### Layer 3: `Dockerfile` 의 native install
 
 ```dockerfile
+FROM debian:trixie-slim
 ARG CLAUDE_CODE_VERSION
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
-RUN claude install ${CLAUDE_CODE_VERSION}
+RUN apt-get install -y curl ca-certificates ...
+RUN curl -fsSL https://claude.ai/install.sh | bash -s ${CLAUDE_CODE_VERSION}
 ```
-- npm install 은 bootstrap (`claude install` 호출용 entry point)
-- `claude install <version>` 이 native installer 패턴 — `~/.local/share/claude/versions/<ver>/` 에 self-contained binary, `~/.local/bin/claude` symlink
-- PATH 우선순위로 native 가 npm-global 보다 먼저 선택됨 (호스트와 동일 메커니즘)
+- 공식 권장 `install.sh` 의 **버전 핀 모드** (`bash -s <ver>`)
+- 결과: `~/.local/share/claude/versions/<ver>/` 에 self-contained Bun-compiled binary, `~/.local/bin/claude` symlink
+- **Node·npm 베이스 불필요** — Claude Code 는 runtime 임베드 binary. 베이스 이미지가 `node:24-slim` 에서 `debian:trixie-slim` 으로 슬림화 (이미지 크기 약 350 MB 감소)
+- 호스트의 `install.sh` 와 정확히 동일 메커니즘 — 인지부하 통일
 
 ## 정상 업데이트 흐름 — 4단계
 
