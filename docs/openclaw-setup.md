@@ -74,18 +74,27 @@ which npm         # nvm 경로 안에 있는지
 
 ### Step 2 — OpenClaw 설치
 
-공식 install.sh 의 **npm method** (시스템 Node 사용, 가장 단순):
+> ⚠️ **버전 핀 필수 — 2026.4.21**: 2026.4.24 부터 `claude-cli/*` legacy model ref 를 canonical `anthropic/*` 로 자동 rewrite 하면서 호출 경로가 Claude CLI 서브프로세스 → 직접 Anthropic API 로 바뀜. 직접 호출은 third-party 앱으로 인식돼 Pro/Max 구독 한도 사용 불가, extra usage 크레딧이 필요해짐. 본 시스템은 OAuth 로 구독을 재사용하는 설계라 **2026.4.21 핀이 필수**. 자세한 진단·복구: 트러블슈팅 §"2026.4.24 이후 버전의 third-party billing 에러".
+
+공식 install.sh 는 latest 로 가므로 이 시스템엔 비추천. **npm 으로 명시 버전** 설치:
+
 ```bash
-curl -fsSL --proto '=https' --tlsv1.2 https://openclaw.ai/install.sh | bash -s -- --no-onboard
+# 권장 — 명시 버전 핀
+npm install -g openclaw@2026.4.21
+
+# (참고) install.sh latest — 위 rewrite 버그 해결 패치 릴리즈 전엔 사용 금지
+# curl -fsSL --proto '=https' --tlsv1.2 https://openclaw.ai/install.sh | bash -s -- --no-onboard
 ```
 
-`--no-onboard` 로 설치만 하고 onboarding 은 다음 단계에서 명시적으로. CI 친화적 + 단계별 검증 가능.
+`--no-onboard` 효과는 npm install 도 동일 (onboarding 은 Step 3 에서 명시적으로).
 
 **검증**:
 ```bash
 which openclaw                  # /home/$USER/.nvm/versions/node/v24.x.x/bin/openclaw 기대
-openclaw --version              # OpenClaw 2026.x.x (commit hash) 형태
+openclaw --version              # OpenClaw 2026.4.21 정확히 이 버전이어야
 ```
+
+> 이 핀은 OpenClaw 가 legacy ref 호환 또는 OAuth-구독 third-party 정책 우회 패치 릴리즈 시 해제. 그 전엔 4.21 유지.
 
 ### Step 3 — Onboarding (Claude CLI OAuth 재사용)
 
@@ -409,13 +418,45 @@ cp ~/.openclaw/openclaw.json.last-good ~/.openclaw/openclaw.json
 systemctl --user restart openclaw-gateway.service
 ```
 
+### 2026.4.24 이후 버전의 third-party billing 에러
+
+**증상**: 봇 또는 TUI 호출 시 모델 응답 대신 다음 에러:
+```
+HTTP 400 invalid_request_error: Third-party apps now draw from your extra usage,
+not your plan limits. Add more at claude.ai/settings/usage and keep going.
+```
+
+**원인**: 2026.4.24 가 `claude-cli/<model>` legacy ref 를 `anthropic/<model>` canonical 로 자동 rewrite. legacy ref 는 *Claude CLI 바이너리 서브프로세스* 호출 경로 (Anthropic 이 Claude CLI 자체로 인식 → Pro/Max 구독 한도 사용), canonical ref 는 *OpenClaw 가 직접 Anthropic API 호출* (third-party 앱 → extra usage 크레딧 필요). 새 정책이 third-party OAuth 사용을 구독 한도에서 분리.
+
+**근본 진단**:
+```bash
+journalctl --user -u openclaw-gateway.service --no-pager | grep 'agent model'
+# `agent model: anthropic/claude-opus-4-7` 보이면 rewrite 발생 — 문제 상태
+# `agent model: claude-cli/claude-opus-4-7` 정상 — legacy 보존됨
+```
+
+**조치 — 2026.4.21 로 다운그레이드**:
+```bash
+systemctl --user stop openclaw-gateway.service
+npm install -g openclaw@2026.4.21
+openclaw --version       # 2026.4.21 확인
+systemctl --user start openclaw-gateway.service
+```
+
+다운그레이드 후 첫 시작은 플러그인 의존성 재설치(acpx, playwright, telegram libs 등) 로 ~3분 소요. `journalctl` 에서 `[gateway] ready` 메시지 확인 후 사용. 첫 ready 후엔 정상 속도.
+
+**대안** — extra usage 크레딧 활성화 (2026.4.24 유지하면서 별도 청구 수용 시): claude.ai/settings/usage 에서 결제수단 등록 + 잔액 충전. 단 구독과 별도 청구 누적 → 비용 모델 자체가 바뀜. Pro/Max 정액 안에서 운영하려면 다운그레이드가 정답.
+
+**관련 단서**: 데스크톱 셋업 시 `openclaw config set agents.defaults.agentRuntime.id` 가 `Unrecognized key` 로 거부되는 것도 이 빌드의 schema 문제 일부. legacy `claude-cli/*` 경로를 막은 것과 동일 변경 세트로 추정.
+
 ---
 
 ## 운영 사례
 
 | 머신 | 셋업 일자 | 설치 방법 | 비고 |
 |---|---|---|---|
-| desktop (ai4lt-wsl2) | 2026-04-23 | install.sh npm method, nvm Node 24 | 첫 적용. Telegram 페어링 완료, 운영 테스트 중 |
+| laptop (ai4lt-wsl2) | 2026-04-23 | install.sh npm method (당시 latest = 2026.4.21), nvm Node 24 | 첫 적용. Telegram 봇 `@benkorea_2brain_bot`. legacy `claude-cli/*` ref 보존 → Pro/Max 구독 호출 정상 |
+| desktop (kimbi-wsl2) | 2026-05-06 | `npm install -g openclaw@2026.4.21` (강제 핀 — install.sh latest 가 2026.4.24 라 rewrite 버그 회피 위해 명시 버전) | Telegram 봇 `@benkorea_2brain_desktop_bot`. 머신별 봇 분리 (polling 충돌 회피). 셋업 중 Step 6 (Telegram), Step 7 (auto-start) 적용. Step 8 (multi-agent), Step 9 (gog skill) 보류 — 데스크톱은 보조 운영기로 단순 유지 |
 
 새 머신 추가 시 본 표 갱신.
 
