@@ -1,0 +1,25 @@
+# compose.brain-pdf.gpu.yml — opt-in GPU access overlay for brain-pdf.
+#
+# 데스크탑 (RTX 3060 보유 + nvidia-container-toolkit 설치) 에서만 사용.
+# 노트북·GPU 없는 PC 에서는 본 오버레이 *제외* — base compose.brain-pdf.yml 만으로 CPU 추론.
+#
+# 사용법:
+#   make build-brain-pdf-gpu
+#   make up-brain-pdf-gpu              # daemon + GPU
+#   make run-brain-pdf-gpu ARGS="..."  # ephemeral + GPU
+#
+# 전제:
+#   1. WSL2 안 nvidia-smi 정상 (RTX 시리즈 + Driver + CUDA runtime)
+#   2. nvidia-container-toolkit 설치됨 (`sudo apt-get install nvidia-container-toolkit`)
+#   3. Docker daemon 에 nvidia runtime 등록됨 (`sudo nvidia-ctk runtime configure --runtime=docker` + restart)
+#   4. `docker run --rm --gpus all nvidia/cuda:12.0.0-base nvidia-smi` 통과
+
+services:
+  brain-pdf:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

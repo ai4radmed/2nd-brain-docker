@@ -1,0 +1,7 @@
+# Docling + MinerU dual PDF parser. CPU inference, host downloads model
+# weights to HuggingFace cache (mounted volume `brain-pdf-models`) on first run.
+#
+# Exact pinned versions captured at P1.4 / P1.5 after first successful install
+# (run `pip freeze` inside the container and pin here).
+docling
+mineru

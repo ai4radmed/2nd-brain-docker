@@ -1,0 +1,42 @@
+# compose.brain-pdf.yml — opt-in overlay for brain-pdf service (Docling + MinerU PDF parser).
+#
+# 사용법:
+#   make build-brain-pdf
+#   make up-brain-pdf        # daemon 모드 (모델 RAM 상주 — 빠른 응답, 4~8GB RAM 점유)
+#   make down-brain-pdf
+#
+#   또는 ephemeral 호출 (Phase 1 기본 — kimbi WSL2 14GB 한도 고려):
+#   docker compose -f compose.yml -f compose.brain-pdf.yml run --rm brain-pdf parse-docling <pdf>
+#
+# 활성화 전제:
+#   1. .env 에 BRAIN_PDF_VERSION 채움 (예: 2026.05.13)
+#   2. 첫 빌드·첫 실행 시 ~5GB 모델 가중치 다운로드 (HuggingFace) — `brain-pdf-models` named volume 에 영속
+
+services:
+  brain-pdf:
+    build:
+      context: ./images/brain-pdf
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: 2nd-brain/brain-pdf:${BRAIN_PDF_VERSION:?BRAIN_PDF_VERSION must be set in .env (see compose.brain-pdf.yml header)}
+    container_name: sb-brain-pdf
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /home/user/work
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HF_HOME: /home/user/.cache/huggingface
+      # 첫 실행 시 모델 다운로드 허용. P1.4 offline 검증 시 1 로 toggle.
+      TRANSFORMERS_OFFLINE: "0"
+    stdin_open: true
+    tty: true
+    volumes:
+      - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/home/user/projects/2nd-brain-vault
+      - brain-pdf-models:/home/user/.cache/huggingface
+    # daemon 기본 명령. `docker compose run` 으로 override 가능.
+    command: ["sleep", "infinity"]
+
+volumes:
+  brain-pdf-models:
