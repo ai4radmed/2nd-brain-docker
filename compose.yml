@@ -27,7 +27,7 @@ services:
       DISABLE_AUTOUPDATER: "1"
     stdin_open: true
     tty: true
-    restart: unless-stopped
+    restart: no
     volumes:
       - ${SB_DATA:-${HOME}/projects/2nd-brain-vault}:/home/user/projects/2nd-brain-vault
       - ${SB_GUIDE:-${HOME}/projects/2nd-brain-vault-guide}:/home/user/projects/2nd-brain-vault-guide
