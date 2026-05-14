@@ -1,6 +1,5 @@
 .PHONY: build sync up up-gog down restart restart-gog shell logs clean install-wrapper install-systemd \
-        build-brain-pdf up-brain-pdf down-brain-pdf shell-brain-pdf run-brain-pdf \
-        build-brain-pdf-gpu up-brain-pdf-gpu run-brain-pdf-gpu
+        build-brain-pdf up-brain-pdf down-brain-pdf shell-brain-pdf run-brain-pdf
 
 UID := $(shell id -u)
 GID := $(shell id -g)
@@ -10,14 +9,11 @@ export UID GID
 # 자세한 셋업 절차: docs/gogcli-container-setup.md
 COMPOSE_GOG := -f compose.yml -f compose.gog.yml
 
-# compose.brain-pdf.yml 을 합쳐 Docling+MinerU PDF 파서 서비스 활성화.
-# Phase 1 기본 사용은 ephemeral (`run-brain-pdf` 또는 `docker compose run --rm brain-pdf ...`).
-# RAM 여유 시 daemon (`up-brain-pdf`) 으로 모델 warm-keep.
-COMPOSE_BRAIN_PDF := -f compose.yml -f compose.brain-pdf.yml
-
-# GPU 오버레이 추가 — nvidia-container-toolkit 설치된 PC (데스크탑 kimbi RTX 3060) 에서만 사용.
-# `*-brain-pdf-gpu` 타겟이 본 합성을 사용.
-COMPOSE_BRAIN_PDF_GPU := -f compose.yml -f compose.brain-pdf.yml -f compose.brain-pdf.gpu.yml
+# brain-pdf 의 compose 체인은 PC 환경 (NVIDIA 유무) 에 따라 다름 — scripts/detect-compose.sh
+# 가 nvidia-smi + docker runtime 을 검사해 GPU overlay 를 자동 포함/제외.
+# 양 PC (데스크탑 kimbi RTX 3060 / 노트북 Intel Arc) 에서 같은 타겟 사용 가능.
+# Override: `BRAIN_PDF_FORCE_VARIANT=gpu|cpu make ...` (디버깅 / 감지 misfire).
+COMPOSE_BRAIN_PDF := $(shell ./scripts/detect-compose.sh)
 
 build:
 	docker compose build
@@ -68,6 +64,11 @@ install-systemd:
 	@echo "    sudo loginctl enable-linger $$USER"
 
 # ── brain-pdf (Docling + MinerU PDF parser) ──────────────────────────────────
+# 양 PC 공통 타겟. detect-compose.sh 가 NVIDIA 환경 자동 감지.
+#
+# Override (드물게):
+#   BRAIN_PDF_FORCE_VARIANT=cpu make run-brain-pdf   # GPU 있는 PC 에서 강제 CPU
+#   BRAIN_PDF_FORCE_VARIANT=gpu make build-brain-pdf  # 감지 실패 시 강제 GPU
 
 build-brain-pdf:
 	docker compose $(COMPOSE_BRAIN_PDF) build brain-pdf
@@ -83,16 +84,7 @@ down-brain-pdf:
 shell-brain-pdf:
 	docker exec -it sb-brain-pdf /bin/bash
 
-# Ephemeral 일회성 실행 — 인자를 그대로 forward. 예: `make run-brain-pdf ARGS="parse-docling /home/user/projects/2nd-brain-vault/sources/00_inbox/sample.pdf"`
+# Ephemeral 일회성 실행 — 인자를 그대로 forward.
+# 예: `make run-brain-pdf ARGS="brain-pdf parse-docling /home/user/projects/2nd-brain-vault/sources/00_inbox/sample.pdf"`
 run-brain-pdf:
 	docker compose $(COMPOSE_BRAIN_PDF) run --rm brain-pdf $(ARGS)
-
-# GPU variants — 데스크탑 (RTX 3060) 전용. compose.brain-pdf.gpu.yml 합성.
-build-brain-pdf-gpu:
-	docker compose $(COMPOSE_BRAIN_PDF_GPU) build brain-pdf
-
-up-brain-pdf-gpu:
-	docker compose $(COMPOSE_BRAIN_PDF_GPU) up -d brain-pdf
-
-run-brain-pdf-gpu:
-	docker compose $(COMPOSE_BRAIN_PDF_GPU) run --rm brain-pdf $(ARGS)
